@@ -34,6 +34,15 @@ func TestValidateJailDir(t *testing.T) {
 		{"exact /sys", "/sys", true},
 		{"exact /run", "/run", true},
 		{"exact /tmp", "/tmp", true},
+		// /home and /root: exact-only; subdirectories are valid jail targets
+		{"exact /home", "/home", true},
+		{"exact /root", "/root", true},
+		// /var and /opt: exact-only; subdirs like /var/lib/myapp may be valid jails
+		{"exact /var", "/var", true},
+		{"exact /opt", "/opt", true},
+		// /boot: prefix-blocked; no subdirectory is a valid jail target
+		{"exact /boot", "/boot", true},
+		{"under /boot", "/boot/efi", true},
 		// /usr2 must NOT be caught by the /usr prefix check
 		// (only testable if /usr2 exists, so we skip that case here)
 	}

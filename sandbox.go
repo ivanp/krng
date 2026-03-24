@@ -13,29 +13,39 @@ import (
 // running `jailwrap /etc` cannot read /etc/jailwrap.toml before the check fires.
 func validateJailDir(raw string) (string, error) {
 	// Resolve symlinks so a symlink at /home/user/link → /etc bypasses nothing.
+	// EvalSymlinks resolves symlinks and returns a clean absolute path.
 	resolved, err := filepath.EvalSymlinks(raw)
 	if err != nil {
 		return "", fmt.Errorf("JAIL_DIR %q: %w", raw, err)
 	}
-	cleaned := filepath.Clean(resolved)
 
 	// Exact match for filesystem root (must be separate: "/" is a prefix of everything).
-	if cleaned == "/" {
-		return "", fmt.Errorf("JAIL_DIR %q is a protected system path", cleaned)
+	if resolved == "/" {
+		return "", fmt.Errorf("JAIL_DIR %q is a protected system path", resolved)
 	}
 
-	// Prefix match for system directories.
+	// Prefix-blocked directories: no subdirectory is a valid jail target.
 	// Note: trailing slash in the prefix check prevents /usr2 being caught by /usr.
-	forbidden := []string{
+	prefixForbidden := []string{
 		"/usr", "/bin", "/lib", "/lib64",
 		"/etc", "/run", "/proc", "/dev", "/sys", "/tmp",
+		"/boot",
 	}
-	for _, f := range forbidden {
-		if cleaned == f || strings.HasPrefix(cleaned, f+"/") {
-			return "", fmt.Errorf("JAIL_DIR %q is a protected system path", cleaned)
+	for _, f := range prefixForbidden {
+		if resolved == f || strings.HasPrefix(resolved, f+"/") {
+			return "", fmt.Errorf("JAIL_DIR %q is a protected system path", resolved)
 		}
 	}
-	return cleaned, nil
+
+	// Exact-blocked directories: the root itself is forbidden but subdirectories
+	// may be valid jail targets (e.g. /home/user/project, /var/lib/myapp).
+	exactForbidden := []string{"/home", "/root", "/var", "/opt"}
+	for _, f := range exactForbidden {
+		if resolved == f {
+			return "", fmt.Errorf("JAIL_DIR %q is a protected system path", resolved)
+		}
+	}
+	return resolved, nil
 }
 
 // buildBwrapArgs constructs the bwrap argument list from jailDir, cfg and uid.
