@@ -54,6 +54,19 @@ func buildBwrapArgs(jailDir string, cfg Config, uid int) ([]string, error) {
 	uidStr := strconv.Itoa(uid)
 	var args []string
 
+	// ── Home directory (read-only base, must be first) ─────────────────────────
+
+	// Mount HOME read-only as the FIRST mount so that every more-specific --bind
+	// added later (jailDir, cfg.RWBind entries) can shadow individual sub-paths
+	// with writable mounts. bwrap applies mounts left-to-right; later more-specific
+	// mounts win. If this came after --bind jailDir or cfg.RWBind entries, it would
+	// clobber their writability when jailDir/RWBind paths are under $HOME.
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return nil, fmt.Errorf("resolving user home: %w", err)
+	}
+	args = append(args, "--ro-bind", homeDir, homeDir)
+
 	// ── Filesystem baseline ────────────────────────────────────────────────────
 
 	args = append(args, "--ro-bind", "/usr", "/usr")
@@ -169,19 +182,6 @@ func buildBwrapArgs(jailDir string, cfg Config, uid int) ([]string, error) {
 	if newSession {
 		args = append(args, "--new-session")
 	}
-
-	// ── Home directory (read-only base) ───────────────────────────────────────
-
-	// Mount HOME read-only BEFORE config-declared mounts so that specific --bind
-	// entries in cfg.RWBind (e.g. ~/.claude, ~/.dual-graph) can shadow this broad
-	// RO mount with a writable one. bwrap processes mounts left-to-right: a later
-	// more-specific --bind wins over an earlier broader --ro-bind.
-	// (Same principle as --tmpfs /tmp before --bind /tmp in the share_tmp case.)
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return nil, fmt.Errorf("resolving user home: %w", err)
-	}
-	args = append(args, "--ro-bind", homeDir, homeDir)
 
 	// ── Config-declared extra mounts ───────────────────────────────────────────
 
