@@ -25,19 +25,19 @@ const (
 )
 
 func fatalCode(code int, format string, args ...any) {
-	fmt.Fprintf(os.Stderr, "jailwrap: "+format+"\n", args...)
+	fmt.Fprintf(os.Stderr, "krng: "+format+"\n", args...)
 	os.Exit(code)
 }
 
 func usage() {
 	fmt.Fprintf(os.Stderr, `Usage:
-  jailwrap [JAIL_DIR] COMMAND [ARGS...]
+  krng [WORK_DIR] COMMAND [ARGS...]
 
-Runs COMMAND inside a bwrap sandbox rooted at JAIL_DIR (default: current directory).
-The sandbox has read-only access to system paths and read-write access only to JAIL_DIR.
+Runs COMMAND inside a bwrap sandbox rooted at WORK_DIR (default: current directory).
+The sandbox has read-only access to system paths and read-write access only to WORK_DIR.
 
 Arguments:
-  JAIL_DIR   Optional absolute path to the project directory to sandbox.
+  WORK_DIR   Optional absolute path to the project directory to sandbox.
              Defaults to the current working directory.
   COMMAND    The program to run inside the sandbox.
   ARGS       Arguments passed to COMMAND.
@@ -47,27 +47,27 @@ Options:
   --version        Show version information.
 
 Configuration:
-  Global config:   ~/.config/jailwrap/config.toml  (or $XDG_CONFIG_HOME/jailwrap/config.toml)
-  Project config:  JAIL_DIR/jailwrap.toml
+  Global config:   ~/.config/krng/config.toml  (or $XDG_CONFIG_HOME/krng/config.toml)
+  Project config:  WORK_DIR/krng.toml
 
 Environment overrides:
-  JAILWRAP_PASSENV      Comma-separated env vars to pass through (e.g. "FOO,BAR")
-  JAILWRAP_SHARE_TMP    "1" to share host /tmp; "0" to isolate
-  JAILWRAP_NEW_SESSION  "0" to disable --new-session (re-enables job control)
+  KRNG_PASSENV      Comma-separated env vars to pass through (e.g. "FOO,BAR")
+  KRNG_SHARE_TMP    "1" to share host /tmp; "0" to isolate
+  KRNG_NEW_SESSION  "0" to disable --new-session (re-enables job control)
 
 Exit codes:
   0   Success
   1   Usage error (no arguments)
   2   Invalid arguments or command not found
   3   Config error (parse failure or missing config directory)
-  4   Invalid JAIL_DIR (protected path or symlink attack)
+  4   Invalid WORK_DIR (protected path or symlink attack)
   6   bwrap not found or exec failed
   7   Error constructing sandbox arguments
 
 Examples:
-  jailwrap bash
-  jailwrap /home/user/myproject claude --dangerously-skip-permissions
-  JAILWRAP_PASSENV=ANTHROPIC_API_KEY jailwrap claude
+  krng bash
+  krng /home/user/myproject claude --dangerously-skip-permissions
+  KRNG_PASSENV=ANTHROPIC_API_KEY krng claude
 `)
 }
 
@@ -84,16 +84,16 @@ func main() {
 		usage()
 		os.Exit(0)
 	case "--version":
-		fmt.Printf("jailwrap %s (commit %s, built %s)\n", version, commit, date)
+		fmt.Printf("krng %s (commit %s, built %s)\n", version, commit, date)
 		os.Exit(0)
 	}
 
-	// Nested sandbox detection: JAILWRAP_ACTIVE is set via --setenv in buildBwrapArgs
+	// Nested sandbox detection: KRNG_ACTIVE is set via --setenv in buildBwrapArgs
 	// because --clearenv removes it from the child environment.
-	// WARNING: do not set JAILWRAP_ACTIVE in shell profiles (~/.bashrc, ~/.zshrc, etc.)
+	// WARNING: do not set KRNG_ACTIVE in shell profiles (~/.bashrc, ~/.zshrc, etc.)
 	// — if set outside a sandbox, sandboxing is skipped entirely.
-	if os.Getenv("JAILWRAP_ACTIVE") != "" {
-		// Peek at args to detect JAIL_DIR (for the warning message only).
+	if os.Getenv("KRNG_ACTIVE") != "" {
+		// Peek at args to detect WORK_DIR (for the warning message only).
 		jailDirArg := ""
 		if len(args) > 1 && filepath.IsAbs(args[0]) {
 			if info, statErr := os.Stat(args[0]); statErr == nil && info.IsDir() {
@@ -103,11 +103,11 @@ func main() {
 		}
 		if jailDirArg != "" {
 			fmt.Fprintf(os.Stderr,
-				"jailwrap: warning: already inside a jailwrap sandbox; ignoring JAIL_DIR %q and running %q directly\n",
+				"krng: warning: already inside a krng sandbox; ignoring WORK_DIR %q and running %q directly\n",
 				jailDirArg, args[0])
 		} else {
 			fmt.Fprintf(os.Stderr,
-				"jailwrap: warning: already inside a jailwrap sandbox; running %q directly\n",
+				"krng: warning: already inside a krng sandbox; running %q directly\n",
 				args[0])
 		}
 		// exec the command directly — no double-wrapping
@@ -124,7 +124,7 @@ func main() {
 		}
 	}
 
-	// Determine JAIL_DIR: if first arg is an existing absolute directory, use it.
+	// Determine WORK_DIR: if first arg is an existing absolute directory, use it.
 	jailDir, err := os.Getwd()
 	if err != nil {
 		fatalCode(exitArgs, "getwd: %v", err)
@@ -134,7 +134,7 @@ func main() {
 			jailDir = filepath.Clean(args[0])
 			args = args[1:]
 			if len(args) == 0 {
-				fatalCode(exitArgs, "no command specified after JAIL_DIR")
+				fatalCode(exitArgs, "no command specified after WORK_DIR")
 			}
 		}
 		// Non-directory absolute path: treat as command (fall through)
@@ -142,18 +142,18 @@ func main() {
 
 	// ── Config loading order ────────────────────────────────────────────────
 	// MUST be: load global → validateJailDir → load project config.
-	// Running `jailwrap /etc` must not read /etc/jailwrap.toml before the check fires.
+	// Running `krng /etc` must not read /etc/krng.toml before the check fires.
 
 	configDir, err := os.UserConfigDir()
 	if err != nil {
 		fatalCode(exitConfig, "cannot determine config directory: %v", err)
 	}
-	globalConfigPath := filepath.Join(configDir, "jailwrap", "config.toml")
+	globalConfigPath := filepath.Join(configDir, "krng", "config.toml")
 
 	// First-run: create default config if it doesn't exist.
 	if err := createDefaultConfig(globalConfigPath); err != nil {
 		// Non-fatal: warn and proceed; don't break the user's workflow.
-		fmt.Fprintf(os.Stderr, "jailwrap: warning: could not create default config: %v\n", err)
+		fmt.Fprintf(os.Stderr, "krng: warning: could not create default config: %v\n", err)
 	}
 
 	globalCfg, err := loadConfig(globalConfigPath)
@@ -161,13 +161,13 @@ func main() {
 		fatalCode(exitConfig, "%v", err)
 	}
 
-	// Validate JAIL_DIR before loading per-project config.
+	// Validate WORK_DIR before loading per-project config.
 	jailDir, err = validateJailDir(jailDir)
 	if err != nil {
 		fatalCode(exitJailDir, "%v", err)
 	}
 
-	projectCfg, err := loadProjectConfig(filepath.Join(jailDir, "jailwrap.toml"))
+	projectCfg, err := loadProjectConfig(filepath.Join(jailDir, "krng.toml"))
 	if err != nil {
 		fatalCode(exitConfig, "%v", err)
 	}

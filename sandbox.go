@@ -10,7 +10,7 @@ import (
 
 // validateJailDir resolves symlinks and checks that jailDir is not a protected
 // system path. Must be called BEFORE loading the per-project config so that
-// running `jailwrap /etc` cannot read /etc/jailwrap.toml before the check fires.
+// running `krng /etc` cannot read /etc/krng.toml before the check fires.
 func validateJailDir(raw string) (string, error) {
 	// Resolve symlinks so a symlink at /home/user/link → /etc bypasses nothing.
 	// EvalSymlinks resolves symlinks and returns a clean absolute path.
@@ -156,11 +156,11 @@ func buildBwrapArgs(jailDir string, cfg Config, uid int) ([]string, error) {
 		"--chdir", jailDir,
 	)
 
-	// Lock jailwrap.toml read-only inside the sandbox so a sandboxed process
+	// Lock krng.toml read-only inside the sandbox so a sandboxed process
 	// cannot modify it to expand its own privileges on the next invocation.
 	// The --ro-bind here is more specific than the --bind jailDir above, so
 	// bwrap shadows the writable directory mount with a read-only file mount.
-	projectCfgPath := filepath.Join(jailDir, "jailwrap.toml")
+	projectCfgPath := filepath.Join(jailDir, "krng.toml")
 	if _, err := os.Stat(projectCfgPath); err == nil {
 		args = append(args, "--ro-bind", projectCfgPath, projectCfgPath)
 	}
@@ -229,8 +229,8 @@ func buildBwrapArgs(jailDir string, cfg Config, uid int) ([]string, error) {
 		"--setenv", "LANG", lang,
 		"--setenv", "XDG_RUNTIME_DIR", "/run/user/"+uidStr,
 		// Must be explicit: bwrap --clearenv removes it from the child env,
-		// so nested jailwrap detection only works if we set it here.
-		"--setenv", "JAILWRAP_ACTIVE", "1",
+		// so nested krng detection only works if we set it here.
+		"--setenv", "KRNG_ACTIVE", "1",
 	)
 
 	// COLORTERM signals true-color support (e.g. "truecolor", "24bit").

@@ -1,4 +1,4 @@
-BINARY      := jailwrap
+BINARY      := krng
 SYS_PREFIX  := /usr/local
 SYS_BIN     := $(SYS_PREFIX)/bin
 

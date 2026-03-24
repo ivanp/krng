@@ -13,7 +13,7 @@ import (
 //go:embed examples
 var examplesFS embed.FS
 
-// Config is the parsed representation of the global config (~/.config/jailwrap/config.toml).
+// Config is the parsed representation of the global config (~/.config/krng/config.toml).
 // Pointer fields allow detection of "not set" (nil) vs explicit false.
 type Config struct {
 	PassEnv    []string `toml:"passenv"`
@@ -23,7 +23,7 @@ type Config struct {
 	ShareTmp   *bool    `toml:"share_tmp"`
 }
 
-// ProjectConfig is the parsed representation of the per-project config (JAIL_DIR/jailwrap.toml).
+// ProjectConfig is the parsed representation of the per-project config (WORK_DIR/krng.toml).
 // It is intentionally restricted to behavior flags only — bind mounts and env pass-through are
 // not permitted in project config to prevent credential exposure from untrusted repositories.
 type ProjectConfig struct {
@@ -123,7 +123,7 @@ func absPath(p string) (string, error) {
 }
 
 // createDefaultConfig creates the global config directory and file on first run.
-// Uses O_EXCL for atomic creation — safe against concurrent jailwrap invocations
+// Uses O_EXCL for atomic creation — safe against concurrent krng invocations
 // and symlink injection attacks.
 // Returns nil if the file already exists (another process beat us — that's fine).
 func createDefaultConfig(path string) error {
@@ -152,10 +152,10 @@ func createDefaultConfig(path string) error {
 	return nil
 }
 
-// applyEnvOverrides applies JAILWRAP_* environment variables on top of cfg.
+// applyEnvOverrides applies KRNG_* environment variables on top of cfg.
 func applyEnvOverrides(cfg Config) Config {
-	// JAILWRAP_PASSENV: comma-separated, spaces trimmed, empty tokens skipped
-	if v := os.Getenv("JAILWRAP_PASSENV"); v != "" {
+	// KRNG_PASSENV: comma-separated, spaces trimmed, empty tokens skipped
+	if v := os.Getenv("KRNG_PASSENV"); v != "" {
 		for _, name := range strings.Split(v, ",") {
 			name = strings.TrimSpace(name)
 			if name != "" {
@@ -164,8 +164,8 @@ func applyEnvOverrides(cfg Config) Config {
 		}
 	}
 
-	// JAILWRAP_SHARE_TMP: "1" enables, "0" explicitly disables
-	switch os.Getenv("JAILWRAP_SHARE_TMP") {
+	// KRNG_SHARE_TMP: "1" enables, "0" explicitly disables
+	switch os.Getenv("KRNG_SHARE_TMP") {
 	case "1":
 		t := true
 		cfg.ShareTmp = &t
@@ -174,8 +174,8 @@ func applyEnvOverrides(cfg Config) Config {
 		cfg.ShareTmp = &f
 	}
 
-	// JAILWRAP_NEW_SESSION: "0" disables (default is on), "1" explicitly enables
-	switch os.Getenv("JAILWRAP_NEW_SESSION") {
+	// KRNG_NEW_SESSION: "0" disables (default is on), "1" explicitly enables
+	switch os.Getenv("KRNG_NEW_SESSION") {
 	case "0":
 		f := false
 		cfg.NewSession = &f

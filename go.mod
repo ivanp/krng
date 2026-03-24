@@ -1,4 +1,4 @@
-module github.com/ivanp/jailwrap
+module github.com/ivanp/krng
 
 go 1.26.1
 

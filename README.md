@@ -1,6 +1,6 @@
-# jailwrap
+# krng
 
-A lightweight sandbox wrapper for developer tools on Linux. It uses [Bubblewrap](https://github.com/containers/bubblewrap) to confine tools (e.g. AI coding assistants, build systems) to a project directory, isolating them from credentials, SSH keys, GPG sockets, and other sensitive data on the host.
+**krng** (*kurung* — Malay/Indonesian for "to confine") is a lightweight sandbox wrapper for developer tools on Linux. It uses [Bubblewrap](https://github.com/containers/bubblewrap) to confine tools (e.g. AI coding assistants, build systems) to a project directory, isolating them from credentials, SSH keys, GPG sockets, and other sensitive data on the host.
 
 ## Why
 
@@ -26,8 +26,8 @@ AI coding assistants and other developer tools run arbitrary commands. Sandboxin
 ### From source
 
 ```sh
-git clone https://github.com/ivanp/jailwrap
-cd jailwrap
+git clone https://github.com/ivanp/krng
+cd krng
 
 # Install to /usr/local/bin (requires write permission)
 sudo make install
@@ -41,36 +41,36 @@ The binary is statically compiled (`CGO_ENABLED=0`) with no runtime dependencies
 ### Verify
 
 ```sh
-jailwrap --version
+krng --version
 ```
 
 ## Usage
 
 ```sh
-jailwrap [JAIL_DIR] COMMAND [ARGS...]
+krng [WORK_DIR] COMMAND [ARGS...]
 ```
 
-- **`JAIL_DIR`** — optional absolute path to the project directory. Defaults to the current working directory.
+- **`WORK_DIR`** — optional absolute path to the project directory. Defaults to the current working directory.
 - **`COMMAND`** — the program to run inside the sandbox.
 
 ### Examples
 
 ```sh
 # Run bash in the current directory
-jailwrap bash
+krng bash
 
 # Run a tool in a specific project
-jailwrap /home/user/myproject claude --dangerously-skip-permissions
+krng /home/user/myproject claude --dangerously-skip-permissions
 
 # Pass environment variables into the sandbox
-JAILWRAP_PASSENV=ANTHROPIC_API_KEY jailwrap claude
+KRNG_PASSENV=ANTHROPIC_API_KEY krng claude
 ```
 
 ## What the sandbox provides
 
 | Resource | Behavior |
 |---|---|
-| Project directory (`JAIL_DIR`) | Read-write |
+| Project directory (`WORK_DIR`) | Read-write |
 | `/usr`, `/bin`, `/lib`, `/lib64` | Read-only |
 | `/etc/resolv.conf`, `/etc/hosts`, etc. | Read-only (no `/etc/passwd` secrets) |
 | `/etc/ssl/certs`, CA certificates | Read-only |
@@ -84,11 +84,11 @@ JAILWRAP_PASSENV=ANTHROPIC_API_KEY jailwrap claude
 
 ## Configuration
 
-jailwrap uses two levels of TOML configuration:
+krng uses two levels of TOML configuration:
 
 ### Global config
 
-`~/.config/jailwrap/config.toml` (or `$XDG_CONFIG_HOME/jailwrap/config.toml`)
+`~/.config/krng/config.toml` (or `$XDG_CONFIG_HOME/krng/config.toml`)
 
 Created automatically on first run. Settings here apply to every invocation.
 
@@ -122,11 +122,11 @@ ro_bind = [
 
 ### Per-project config
 
-`JAIL_DIR/jailwrap.toml`
+`WORK_DIR/krng.toml`
 
 Per-project config is intentionally **restricted to behavior flags only** (`new_session`, `share_tmp`). Bind mounts and env pass-through are not allowed here — those require the global config, which only you control.
 
-> ⚠ **Security:** `jailwrap.toml` is loaded from the project directory before sandboxing. A malicious repository can use it to change sandbox behavior. Review it before running jailwrap in an untrusted repository.
+> ⚠ **Security:** `krng.toml` is loaded from the project directory before sandboxing. A malicious repository can use it to change sandbox behavior. Review it before running krng in an untrusted repository.
 
 ```toml
 # Disable --new-session to re-enable Ctrl+Z / job control.
@@ -145,19 +145,19 @@ Per-project config is intentionally **restricted to behavior flags only** (`new_
 
 | Variable | Effect |
 |---|---|
-| `JAILWRAP_PASSENV` | Comma-separated env vars to pass through |
-| `JAILWRAP_SHARE_TMP` | `1` = share host `/tmp`; `0` = isolate |
-| `JAILWRAP_NEW_SESSION` | `0` = disable `--new-session`; `1` = enable |
+| `KRNG_PASSENV` | Comma-separated env vars to pass through |
+| `KRNG_SHARE_TMP` | `1` = share host `/tmp`; `0` = isolate |
+| `KRNG_NEW_SESSION` | `0` = disable `--new-session`; `1` = enable |
 
 ## Security notes
 
-**`jailwrap.toml` in a project directory you did not write can declare arbitrary bind mounts.** Review `jailwrap.toml` before running jailwrap in an untrusted repository, just as you would review a `Makefile` or `package.json`.
+**`krng.toml` in a project directory you did not write can change sandbox behavior.** Review `krng.toml` before running krng in an untrusted repository, just as you would review a `Makefile` or `package.json`.
 
-**jailwrap is not a complete security boundary.** It reduces attack surface but does not prevent all possible escapes. For stronger isolation, consider a VM.
+**krng is not a complete security boundary.** It reduces attack surface but does not prevent all possible escapes. For stronger isolation, consider a VM.
 
 **`--new-session`** is enabled by default. It detaches the sandboxed process from the controlling TTY, mitigating CVE-2017-5226 (TIOCSTI injection) and CVE-2025-37814. Disable it with `new_session = false` if you need `Ctrl+Z` / `fg` job control inside the sandbox.
 
-**`JAILWRAP_ACTIVE`** must not be set in shell profiles (`~/.bashrc`, `~/.zshrc`, etc.). If set outside a sandbox, sandboxing is skipped entirely and the command runs with the full parent environment.
+**`KRNG_ACTIVE`** must not be set in shell profiles (`~/.bashrc`, `~/.zshrc`, etc.). If set outside a sandbox, sandboxing is skipped entirely and the command runs with the full parent environment.
 
 ## Exit codes
 
@@ -167,7 +167,7 @@ Per-project config is intentionally **restricted to behavior flags only** (`new_
 | 1 | Usage error (no arguments) |
 | 2 | Invalid arguments or command not found |
 | 3 | Config error (parse failure or unreadable config directory) |
-| 4 | Invalid JAIL_DIR (protected path or unresolvable symlink) |
+| 4 | Invalid WORK_DIR (protected path or unresolvable symlink) |
 | 6 | `bwrap` not found or exec failed |
 | 7 | Error constructing sandbox arguments |
 

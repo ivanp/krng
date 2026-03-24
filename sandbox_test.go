@@ -134,17 +134,17 @@ func TestBuildBwrapArgsHome(t *testing.T) {
 	assertROBind(t, args, home)
 }
 
-func TestBuildBwrapArgsJailwrapTomlROBind(t *testing.T) {
+func TestBuildBwrapArgsKrngTomlROBind(t *testing.T) {
 	t.Parallel()
 
-	// With jailwrap.toml present: file must be bound read-only.
-	dir, err := os.MkdirTemp("", "jailwrap-test-*")
+	// With krng.toml present: file must be bound read-only.
+	dir, err := os.MkdirTemp("", "krng-test-*")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(dir)
 
-	tomlPath := filepath.Join(dir, "jailwrap.toml")
+	tomlPath := filepath.Join(dir, "krng.toml")
 	if err := os.WriteFile(tomlPath, []byte("# empty\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
@@ -155,8 +155,8 @@ func TestBuildBwrapArgsJailwrapTomlROBind(t *testing.T) {
 	}
 	assertROBind(t, args, tomlPath)
 
-	// Without jailwrap.toml: no extra ro-bind for that path.
-	dir2, err := os.MkdirTemp("", "jailwrap-test-*")
+	// Without krng.toml: no extra ro-bind for that path.
+	dir2, err := os.MkdirTemp("", "krng-test-*")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -166,10 +166,10 @@ func TestBuildBwrapArgsJailwrapTomlROBind(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	toml2Path := filepath.Join(dir2, "jailwrap.toml")
+	toml2Path := filepath.Join(dir2, "krng.toml")
 	for i := 0; i+2 < len(args2); i++ {
 		if args2[i] == "--ro-bind" && args2[i+1] == toml2Path {
-			t.Errorf("unexpected --ro-bind %s when jailwrap.toml does not exist", toml2Path)
+			t.Errorf("unexpected --ro-bind %s when krng.toml does not exist", toml2Path)
 		}
 	}
 }
@@ -224,7 +224,7 @@ func TestAbsPath(t *testing.T) {
 
 	t.Run("symlink resolved", func(t *testing.T) {
 		t.Parallel()
-		dir, err := os.MkdirTemp("", "jailwrap-abs-*")
+		dir, err := os.MkdirTemp("", "krng-abs-*")
 		if err != nil {
 			t.Fatal(err)
 		}
