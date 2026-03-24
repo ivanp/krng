@@ -66,6 +66,37 @@ krng /home/user/myproject claude --dangerously-skip-permissions
 KRNG_PASSENV=ANTHROPIC_API_KEY krng claude
 ```
 
+### Running Claude Code
+
+Add the following to `~/.config/krng/config.toml`, then run `krng claude`:
+
+```toml
+ro_bind = [
+  "/opt/claude-code",   # Claude Code installation
+]
+
+bind = [
+  "~/.claude.json",     # Claude Code user config
+  "~/.claude",          # Claude Code session data and MCP servers
+]
+```
+
+```sh
+krng claude
+```
+
+Adjust `bind` entries to match the tools you use inside Claude Code. For example:
+
+```toml
+bind = [
+  "~/.claude.json",
+  "~/.claude",
+  "~/.dual-graph",      # dual-graph MCP state
+  "~/go",               # Go toolchain (for Go-based MCP servers)
+  "~/.cache/uv",        # uv Python package cache
+]
+```
+
 ## What the sandbox provides
 
 | Resource | Behavior |
@@ -78,7 +109,7 @@ KRNG_PASSENV=ANTHROPIC_API_KEY krng claude
 | `/tmp` | Isolated tmpfs (no X11 sockets) — see `share_tmp` |
 | `/proc`, `/dev` | Virtualised |
 | Network | Shared with host |
-| `HOME` | Real user home directory, mounted read-only (write attempts fail) |
+| `HOME` | Isolated tmpfs — only paths listed in `bind`/`ro_bind` are accessible |
 | SSH keys, GPG keys, credentials | Not accessible |
 | `SSH_AUTH_SOCK`, `DBUS_SESSION_BUS_ADDRESS`, `AWS_*`, `GH_TOKEN`, etc. | Cleared (`--clearenv`) |
 
