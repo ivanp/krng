@@ -170,6 +170,19 @@ func buildBwrapArgs(jailDir string, cfg Config, uid int) ([]string, error) {
 		args = append(args, "--new-session")
 	}
 
+	// ── Home directory (read-only base) ───────────────────────────────────────
+
+	// Mount HOME read-only BEFORE config-declared mounts so that specific --bind
+	// entries in cfg.RWBind (e.g. ~/.claude, ~/.dual-graph) can shadow this broad
+	// RO mount with a writable one. bwrap processes mounts left-to-right: a later
+	// more-specific --bind wins over an earlier broader --ro-bind.
+	// (Same principle as --tmpfs /tmp before --bind /tmp in the share_tmp case.)
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return nil, fmt.Errorf("resolving user home: %w", err)
+	}
+	args = append(args, "--ro-bind", homeDir, homeDir)
+
 	// ── Config-declared extra mounts ───────────────────────────────────────────
 
 	for _, p := range cfg.ROBind {
@@ -207,15 +220,6 @@ func buildBwrapArgs(jailDir string, cfg Config, uid int) ([]string, error) {
 	if lang == "" {
 		lang = "en_US.UTF-8"
 	}
-
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return nil, fmt.Errorf("resolving user home: %w", err)
-	}
-
-	// Mount the real home directory read-only so tools can read ~/.gitconfig,
-	// ~/.config, ~/.claude, etc. The writable surface remains JAIL_DIR only.
-	args = append(args, "--ro-bind", homeDir, homeDir)
 
 	args = append(args,
 		"--setenv", "HOME", homeDir,
