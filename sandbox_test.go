@@ -131,20 +131,53 @@ func TestBuildBwrapArgsHome(t *testing.T) {
 		t.Fatal(err)
 	}
 	assertEnv(t, args, "HOME", home)
-	assertROBind(t, args, home)
+	assertTmpfs(t, args, home)
 }
 
-func TestBuildBwrapArgsJailwrapTomlROBind(t *testing.T) {
+func TestTmpfsHomeBeforeChildBinds(t *testing.T) {
 	t.Parallel()
 
-	// With jailwrap.toml present: file must be bound read-only.
-	dir, err := os.MkdirTemp("", "jailwrap-test-*")
+	home, _ := os.UserHomeDir()
+	childPath := filepath.Join(home, ".claude")
+	cfg := Config{RWBind: []string{childPath}}
+
+	args, err := buildBwrapArgs(home, cfg, os.Getuid())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tmpfsIdx := -1
+	bindIdx := -1
+	for i, a := range args {
+		if a == "--tmpfs" && i+1 < len(args) && args[i+1] == home {
+			tmpfsIdx = i
+		}
+		if a == "--bind" && i+1 < len(args) && args[i+1] == childPath {
+			bindIdx = i
+		}
+	}
+	if tmpfsIdx == -1 {
+		t.Fatal("--tmpfs home not found in args")
+	}
+	if bindIdx == -1 {
+		t.Fatal("--bind child not found in args")
+	}
+	if tmpfsIdx > bindIdx {
+		t.Errorf("--tmpfs home (idx %d) must come before --bind child (idx %d)", tmpfsIdx, bindIdx)
+	}
+}
+
+func TestBuildBwrapArgsKrngTomlROBind(t *testing.T) {
+	t.Parallel()
+
+	// With krng.toml present: file must be bound read-only.
+	dir, err := os.MkdirTemp("", "krng-test-*")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(dir)
 
-	tomlPath := filepath.Join(dir, "jailwrap.toml")
+	tomlPath := filepath.Join(dir, "krng.toml")
 	if err := os.WriteFile(tomlPath, []byte("# empty\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
@@ -155,8 +188,8 @@ func TestBuildBwrapArgsJailwrapTomlROBind(t *testing.T) {
 	}
 	assertROBind(t, args, tomlPath)
 
-	// Without jailwrap.toml: no extra ro-bind for that path.
-	dir2, err := os.MkdirTemp("", "jailwrap-test-*")
+	// Without krng.toml: no extra ro-bind for that path.
+	dir2, err := os.MkdirTemp("", "krng-test-*")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -166,10 +199,10 @@ func TestBuildBwrapArgsJailwrapTomlROBind(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	toml2Path := filepath.Join(dir2, "jailwrap.toml")
+	toml2Path := filepath.Join(dir2, "krng.toml")
 	for i := 0; i+2 < len(args2); i++ {
 		if args2[i] == "--ro-bind" && args2[i+1] == toml2Path {
-			t.Errorf("unexpected --ro-bind %s when jailwrap.toml does not exist", toml2Path)
+			t.Errorf("unexpected --ro-bind %s when krng.toml does not exist", toml2Path)
 		}
 	}
 }
@@ -183,6 +216,17 @@ func assertROBind(t *testing.T, args []string, path string) {
 		}
 	}
 	t.Errorf("--ro-bind %s %s not found in args", path, path)
+}
+
+// assertTmpfs scans bwrap args for --tmpfs PATH and fails if not found.
+func assertTmpfs(t *testing.T, args []string, path string) {
+	t.Helper()
+	for i := 0; i+1 < len(args); i++ {
+		if args[i] == "--tmpfs" && args[i+1] == path {
+			return
+		}
+	}
+	t.Errorf("--tmpfs %s not found in args", path)
 }
 
 // assertEnv scans a bwrap args slice for --setenv KEY VALUE and checks the value.
@@ -224,7 +268,7 @@ func TestAbsPath(t *testing.T) {
 
 	t.Run("symlink resolved", func(t *testing.T) {
 		t.Parallel()
-		dir, err := os.MkdirTemp("", "jailwrap-abs-*")
+		dir, err := os.MkdirTemp("", "krng-abs-*")
 		if err != nil {
 			t.Fatal(err)
 		}

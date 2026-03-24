@@ -9,7 +9,7 @@
 *.test
 
 # Output of `go build`
-/jailwrap
+/krng
 
 # Go workspace file
 go.work
@@ -45,3 +45,4 @@ coverage.html
 firebase-debug.log
 /todos/
 /docs/
+.dual-graph/

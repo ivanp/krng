@@ -10,7 +10,7 @@ import (
 
 // validateJailDir resolves symlinks and checks that jailDir is not a protected
 // system path. Must be called BEFORE loading the per-project config so that
-// running `jailwrap /etc` cannot read /etc/jailwrap.toml before the check fires.
+// running `krng /etc` cannot read /etc/krng.toml before the check fires.
 func validateJailDir(raw string) (string, error) {
 	// Resolve symlinks so a symlink at /home/user/link → /etc bypasses nothing.
 	// EvalSymlinks resolves symlinks and returns a clean absolute path.
@@ -54,18 +54,17 @@ func buildBwrapArgs(jailDir string, cfg Config, uid int) ([]string, error) {
 	uidStr := strconv.Itoa(uid)
 	var args []string
 
-	// ── Home directory (read-only base, must be first) ─────────────────────────
+	// ── Home directory (tmpfs base, must be first) ───────────────────────────
 
-	// Mount HOME read-only as the FIRST mount so that every more-specific --bind
-	// added later (jailDir, cfg.RWBind entries) can shadow individual sub-paths
-	// with writable mounts. bwrap applies mounts left-to-right; later more-specific
-	// mounts win. If this came after --bind jailDir or cfg.RWBind entries, it would
-	// clobber their writability when jailDir/RWBind paths are under $HOME.
+	// Mount HOME as tmpfs FIRST so the sandbox starts with an empty home directory.
+	// Credential files (.ssh, .aws, etc.) are invisible by default — allowlist only.
+	// Explicit cfg.ROBind and cfg.RWBind entries under HOME are appended later and
+	// land inside this tmpfs; bwrap applies mounts left-to-right.
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return nil, fmt.Errorf("resolving user home: %w", err)
 	}
-	args = append(args, "--ro-bind", homeDir, homeDir)
+	args = append(args, "--tmpfs", homeDir)
 
 	// ── Filesystem baseline ────────────────────────────────────────────────────
 
@@ -156,11 +155,11 @@ func buildBwrapArgs(jailDir string, cfg Config, uid int) ([]string, error) {
 		"--chdir", jailDir,
 	)
 
-	// Lock jailwrap.toml read-only inside the sandbox so a sandboxed process
+	// Lock krng.toml read-only inside the sandbox so a sandboxed process
 	// cannot modify it to expand its own privileges on the next invocation.
 	// The --ro-bind here is more specific than the --bind jailDir above, so
 	// bwrap shadows the writable directory mount with a read-only file mount.
-	projectCfgPath := filepath.Join(jailDir, "jailwrap.toml")
+	projectCfgPath := filepath.Join(jailDir, "krng.toml")
 	if _, err := os.Stat(projectCfgPath); err == nil {
 		args = append(args, "--ro-bind", projectCfgPath, projectCfgPath)
 	}
@@ -229,8 +228,8 @@ func buildBwrapArgs(jailDir string, cfg Config, uid int) ([]string, error) {
 		"--setenv", "LANG", lang,
 		"--setenv", "XDG_RUNTIME_DIR", "/run/user/"+uidStr,
 		// Must be explicit: bwrap --clearenv removes it from the child env,
-		// so nested jailwrap detection only works if we set it here.
-		"--setenv", "JAILWRAP_ACTIVE", "1",
+		// so nested krng detection only works if we set it here.
+		"--setenv", "KRNG_ACTIVE", "1",
 	)
 
 	// COLORTERM signals true-color support (e.g. "truecolor", "24bit").

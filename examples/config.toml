@@ -1,12 +1,12 @@
-# jailwrap global configuration
-# Location: ~/.config/jailwrap/config.toml  (or $XDG_CONFIG_HOME/jailwrap/config.toml)
+# krng global configuration
+# Location: ~/.config/krng/config.toml  (or $XDG_CONFIG_HOME/krng/config.toml)
 #
-# Settings here apply to every jailwrap invocation.
-# Per-project overrides go in jailwrap.toml at the project root.
+# Settings here apply to every krng invocation.
+# Per-project overrides go in krng.toml at the project root.
 # All lists are merged additively — project entries are appended to global entries.
 #
-# SECURITY NOTE: jailwrap.toml in a project directory you did not write can declare
-# arbitrary bind mounts. Review jailwrap.toml before running jailwrap in an untrusted
+# SECURITY NOTE: krng.toml in a project directory you did not write can change
+# sandbox behavior. Review krng.toml before running krng in an untrusted
 # repository, just as you would review a Makefile or package.json.
 
 # Environment variables to pass through into the sandbox.
