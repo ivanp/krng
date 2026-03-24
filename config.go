@@ -90,36 +90,26 @@ func mergeConfigs(global Config, project ProjectConfig) Config {
 	return merged
 }
 
-// expandHome expands a leading ~ or ~/ to the user's home directory.
-// Returns an error if HOME is unset rather than silently producing a wrong path.
-func expandHome(p string) (string, error) {
+// absPath expands a leading ~ or ~/ to the user's home directory, verifies the
+// result is absolute, and resolves symlinks. Relative paths and non-existent
+// paths are rejected with a clear error rather than producing cryptic bwrap failures.
+func absPath(p string) (string, error) {
+	var expanded string
 	switch {
 	case p == "~":
 		home, err := os.UserHomeDir()
 		if err != nil {
 			return "", fmt.Errorf("expand ~: %w", err)
 		}
-		return home, nil
+		expanded = home
 	case strings.HasPrefix(p, "~/"):
 		home, err := os.UserHomeDir()
 		if err != nil {
 			return "", fmt.Errorf("expand ~/: %w", err)
 		}
-		return filepath.Join(home, p[2:]), nil
+		expanded = filepath.Join(home, p[2:])
 	default:
-		return p, nil
-	}
-}
-
-// absPath expands ~ and verifies the result is an absolute path.
-// Relative paths (or bare filenames) in config are rejected with an error.
-// EvalSymlinks is used so symlinks in config paths resolve to their targets
-// before being passed to bwrap; it also provides clear "does not exist" errors
-// instead of cryptic bwrap failures for typos in config.
-func absPath(p string) (string, error) {
-	expanded, err := expandHome(p)
-	if err != nil {
-		return "", err
+		expanded = p
 	}
 	cleaned := filepath.Clean(expanded)
 	if !filepath.IsAbs(cleaned) {

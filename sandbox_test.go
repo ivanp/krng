@@ -48,7 +48,6 @@ func TestValidateJailDir(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			_, err := validateJailDir(tt.input)
@@ -118,38 +117,6 @@ func TestMergeConfigs(t *testing.T) {
 			t.Errorf("expected all empty slices, got %+v", got)
 		}
 	})
-}
-
-// ── expandHome ───────────────────────────────────────────────────────────────
-
-func TestExpandHome(t *testing.T) {
-	t.Parallel()
-
-	home, _ := os.UserHomeDir()
-
-	tests := []struct {
-		input string
-		want  string
-	}{
-		{"~", home},
-		{"~/foo/bar", home + "/foo/bar"},
-		{"/absolute/path", "/absolute/path"},
-		{"relative/path", "relative/path"},
-	}
-
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.input, func(t *testing.T) {
-			t.Parallel()
-			got, err := expandHome(tt.input)
-			if err != nil {
-				t.Fatalf("expandHome(%q) unexpected error: %v", tt.input, err)
-			}
-			if got != tt.want {
-				t.Errorf("expandHome(%q) = %q, want %q", tt.input, got, tt.want)
-			}
-		})
-	}
 }
 
 // ── buildBwrapArgs: HOME ──────────────────────────────────────────────────────

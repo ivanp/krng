@@ -113,14 +113,11 @@ func buildBwrapArgs(jailDir string, cfg Config, uid int) ([]string, error) {
 		"/etc/localtime",
 		"/etc/passwd",
 		"/etc/group",
+		"/etc/ssl/certs",
+		"/etc/ca-certificates",
 	} {
 		if _, err := os.Stat(f); err == nil {
 			args = append(args, "--ro-bind", f, f)
-		}
-	}
-	for _, d := range []string{"/etc/ssl/certs", "/etc/ca-certificates"} {
-		if _, err := os.Stat(d); err == nil {
-			args = append(args, "--ro-bind", d, d)
 		}
 	}
 
