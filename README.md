@@ -78,7 +78,7 @@ JAILWRAP_PASSENV=ANTHROPIC_API_KEY jailwrap claude
 | `/tmp` | Isolated tmpfs (no X11 sockets) — see `share_tmp` |
 | `/proc`, `/dev` | Virtualised |
 | Network | Shared with host |
-| `HOME` | Real user home directory (read-only unless explicitly bound) |
+| `HOME` | Real user home directory, mounted read-only (write attempts fail) |
 | SSH keys, GPG keys, credentials | Not accessible |
 | `SSH_AUTH_SOCK`, `DBUS_SESSION_BUS_ADDRESS`, `AWS_*`, `GH_TOKEN`, etc. | Cleared (`--clearenv`) |
 
@@ -156,6 +156,20 @@ Per-project config is intentionally **restricted to behavior flags only** (`new_
 **jailwrap is not a complete security boundary.** It reduces attack surface but does not prevent all possible escapes. For stronger isolation, consider a VM.
 
 **`--new-session`** is enabled by default. It detaches the sandboxed process from the controlling TTY, mitigating CVE-2017-5226 (TIOCSTI injection) and CVE-2025-37814. Disable it with `new_session = false` if you need `Ctrl+Z` / `fg` job control inside the sandbox.
+
+**`JAILWRAP_ACTIVE`** must not be set in shell profiles (`~/.bashrc`, `~/.zshrc`, etc.). If set outside a sandbox, sandboxing is skipped entirely and the command runs with the full parent environment.
+
+## Exit codes
+
+| Code | Meaning |
+|---|---|
+| 0 | Success |
+| 1 | Usage error (no arguments) |
+| 2 | Invalid arguments or command not found |
+| 3 | Config error (parse failure or unreadable config directory) |
+| 4 | Invalid JAIL_DIR (protected path or unresolvable symlink) |
+| 6 | `bwrap` not found or exec failed |
+| 7 | Error constructing sandbox arguments |
 
 ## Building
 

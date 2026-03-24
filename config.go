@@ -113,6 +113,9 @@ func expandHome(p string) (string, error) {
 
 // absPath expands ~ and verifies the result is an absolute path.
 // Relative paths (or bare filenames) in config are rejected with an error.
+// EvalSymlinks is used so symlinks in config paths resolve to their targets
+// before being passed to bwrap; it also provides clear "does not exist" errors
+// instead of cryptic bwrap failures for typos in config.
 func absPath(p string) (string, error) {
 	expanded, err := expandHome(p)
 	if err != nil {
@@ -122,7 +125,11 @@ func absPath(p string) (string, error) {
 	if !filepath.IsAbs(cleaned) {
 		return "", fmt.Errorf("path %q must be absolute (no relative paths in config)", p)
 	}
-	return cleaned, nil
+	resolved, err := filepath.EvalSymlinks(cleaned)
+	if err != nil {
+		return "", fmt.Errorf("path %q: %w", p, err)
+	}
+	return resolved, nil
 }
 
 // createDefaultConfig creates the global config directory and file on first run.

@@ -14,9 +14,19 @@ var (
 	date    = "unknown"
 )
 
-func fatal(format string, args ...any) {
+// Exit codes. Orchestrators can use these to distinguish failure modes without
+// parsing stderr strings.
+const (
+	exitArgs    = 2 // invalid arguments or missing command
+	exitConfig  = 3 // config parse or creation error
+	exitJailDir = 4 // validateJailDir rejected the path
+	exitBwrap   = 6 // bwrap not found or exec failed
+	exitSandbox = 7 // buildBwrapArgs error
+)
+
+func fatalCode(code int, format string, args ...any) {
 	fmt.Fprintf(os.Stderr, "jailwrap: "+format+"\n", args...)
-	os.Exit(1)
+	os.Exit(code)
 }
 
 func usage() {
@@ -45,6 +55,15 @@ Environment overrides:
   JAILWRAP_SHARE_TMP    "1" to share host /tmp; "0" to isolate
   JAILWRAP_NEW_SESSION  "0" to disable --new-session (re-enables job control)
 
+Exit codes:
+  0   Success
+  1   Usage error (no arguments)
+  2   Invalid arguments or command not found
+  3   Config error (parse failure or missing config directory)
+  4   Invalid JAIL_DIR (protected path or symlink attack)
+  6   bwrap not found or exec failed
+  7   Error constructing sandbox arguments
+
 Examples:
   jailwrap bash
   jailwrap /home/user/myproject claude --dangerously-skip-permissions
@@ -71,33 +90,51 @@ func main() {
 
 	// Nested sandbox detection: JAILWRAP_ACTIVE is set via --setenv in buildBwrapArgs
 	// because --clearenv removes it from the child environment.
+	// WARNING: do not set JAILWRAP_ACTIVE in shell profiles (~/.bashrc, ~/.zshrc, etc.)
+	// — if set outside a sandbox, sandboxing is skipped entirely.
 	if os.Getenv("JAILWRAP_ACTIVE") != "" {
-		fmt.Fprintf(os.Stderr, "jailwrap: warning: already inside a jailwrap sandbox; running command directly\n")
+		// Peek at args to detect JAIL_DIR (for the warning message only).
+		jailDirArg := ""
+		if len(args) > 1 && filepath.IsAbs(args[0]) {
+			if info, statErr := os.Stat(args[0]); statErr == nil && info.IsDir() {
+				jailDirArg = args[0]
+				args = args[1:]
+			}
+		}
+		if jailDirArg != "" {
+			fmt.Fprintf(os.Stderr,
+				"jailwrap: warning: already inside a jailwrap sandbox; ignoring JAIL_DIR %q and running %q directly\n",
+				jailDirArg, args[0])
+		} else {
+			fmt.Fprintf(os.Stderr,
+				"jailwrap: warning: already inside a jailwrap sandbox; running %q directly\n",
+				args[0])
+		}
 		// exec the command directly — no double-wrapping
 		cmdPath, err := exec.LookPath(args[0])
 		if err != nil {
-			fatal("command not found: %s", args[0])
+			fatalCode(exitArgs, "command not found: %s", args[0])
 		}
 		if !filepath.IsAbs(cmdPath) {
-			fatal("exec.LookPath returned non-absolute path %q", cmdPath)
+			fatalCode(exitBwrap, "exec.LookPath returned non-absolute path %q", cmdPath)
 		}
 		os.Stderr.Sync()
 		if err := syscall.Exec(cmdPath, args, os.Environ()); err != nil {
-			fatal("exec %s: %v", cmdPath, err)
+			fatalCode(exitBwrap, "exec %s: %v", cmdPath, err)
 		}
 	}
 
 	// Determine JAIL_DIR: if first arg is an existing absolute directory, use it.
 	jailDir, err := os.Getwd()
 	if err != nil {
-		fatal("getwd: %v", err)
+		fatalCode(exitArgs, "getwd: %v", err)
 	}
 	if filepath.IsAbs(args[0]) {
 		if info, err := os.Stat(args[0]); err == nil && info.IsDir() {
 			jailDir = filepath.Clean(args[0])
 			args = args[1:]
 			if len(args) == 0 {
-				fatal("no command specified after JAIL_DIR")
+				fatalCode(exitArgs, "no command specified after JAIL_DIR")
 			}
 		}
 		// Non-directory absolute path: treat as command (fall through)
@@ -109,7 +146,7 @@ func main() {
 
 	configDir, err := os.UserConfigDir()
 	if err != nil {
-		fatal("cannot determine config directory: %v", err)
+		fatalCode(exitConfig, "cannot determine config directory: %v", err)
 	}
 	globalConfigPath := filepath.Join(configDir, "jailwrap", "config.toml")
 
@@ -121,18 +158,18 @@ func main() {
 
 	globalCfg, err := loadConfig(globalConfigPath)
 	if err != nil {
-		fatal("%v", err)
+		fatalCode(exitConfig, "%v", err)
 	}
 
 	// Validate JAIL_DIR before loading per-project config.
 	jailDir, err = validateJailDir(jailDir)
 	if err != nil {
-		fatal("%v", err)
+		fatalCode(exitJailDir, "%v", err)
 	}
 
 	projectCfg, err := loadProjectConfig(filepath.Join(jailDir, "jailwrap.toml"))
 	if err != nil {
-		fatal("%v", err)
+		fatalCode(exitConfig, "%v", err)
 	}
 
 	cfg := mergeConfigs(globalCfg, projectCfg)
@@ -140,17 +177,17 @@ func main() {
 
 	bwrapArgs, err := buildBwrapArgs(jailDir, cfg, os.Getuid())
 	if err != nil {
-		fatal("build sandbox args: %v", err)
+		fatalCode(exitSandbox, "build sandbox args: %v", err)
 	}
 
 	bwrapPath, err := exec.LookPath("bwrap")
 	if err != nil {
-		fatal("bwrap not found in PATH: %v\nInstall bubblewrap: https://github.com/containers/bubblewrap", err)
+		fatalCode(exitBwrap, "bwrap not found in PATH: %v\nInstall bubblewrap: https://github.com/containers/bubblewrap", err)
 	}
 	// Guard against PATH injection: LookPath should always return an absolute path,
 	// but verify explicitly.
 	if !filepath.IsAbs(bwrapPath) {
-		fatal("exec.LookPath(\"bwrap\") returned non-absolute path %q", bwrapPath)
+		fatalCode(exitBwrap, "exec.LookPath(\"bwrap\") returned non-absolute path %q", bwrapPath)
 	}
 
 	// Build final argv: bwrap <sandbox-args> -- <command> <command-args>
@@ -168,6 +205,6 @@ func main() {
 
 	os.Stderr.Sync()
 	if err := syscall.Exec(bwrapPath, argv, bwrapEnv); err != nil {
-		fatal("exec bwrap: %v", err)
+		fatalCode(exitBwrap, "exec bwrap: %v", err)
 	}
 }

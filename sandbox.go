@@ -213,6 +213,10 @@ func buildBwrapArgs(jailDir string, cfg Config, uid int) ([]string, error) {
 		return nil, fmt.Errorf("resolving user home: %w", err)
 	}
 
+	// Mount the real home directory read-only so tools can read ~/.gitconfig,
+	// ~/.config, ~/.claude, etc. The writable surface remains JAIL_DIR only.
+	args = append(args, "--ro-bind", homeDir, homeDir)
+
 	args = append(args,
 		"--setenv", "HOME", homeDir,
 		"--setenv", "TMPDIR", "/tmp",

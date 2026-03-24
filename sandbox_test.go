@@ -164,6 +164,7 @@ func TestBuildBwrapArgsHome(t *testing.T) {
 		t.Fatal(err)
 	}
 	assertEnv(t, args, "HOME", home)
+	assertROBind(t, args, home)
 }
 
 func TestBuildBwrapArgsJailwrapTomlROBind(t *testing.T) {
@@ -240,17 +241,42 @@ func TestAbsPath(t *testing.T) {
 
 	t.Run("absolute path unchanged", func(t *testing.T) {
 		t.Parallel()
-		got, err := absPath("/usr/local/bin")
-		if err != nil || got != "/usr/local/bin" {
-			t.Errorf("absPath(/usr/local/bin) = %q, %v", got, err)
+		got, err := absPath(home)
+		if err != nil || got != home {
+			t.Errorf("absPath(%q) = %q, %v", home, got, err)
 		}
 	})
 
-	t.Run("tilde expanded to absolute", func(t *testing.T) {
+	t.Run("tilde expanded to home", func(t *testing.T) {
 		t.Parallel()
-		got, err := absPath("~/foo")
-		if err != nil || got != home+"/foo" {
-			t.Errorf("absPath(~/foo) = %q, %v", got, err)
+		got, err := absPath("~")
+		if err != nil || got != home {
+			t.Errorf("absPath(~) = %q, %v", got, err)
+		}
+	})
+
+	t.Run("symlink resolved", func(t *testing.T) {
+		t.Parallel()
+		dir, err := os.MkdirTemp("", "jailwrap-abs-*")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer os.RemoveAll(dir)
+		link := filepath.Join(dir, "link")
+		if err := os.Symlink(dir, link); err != nil {
+			t.Fatal(err)
+		}
+		got, absErr := absPath(link)
+		if absErr != nil || got != dir {
+			t.Errorf("absPath(symlink) = %q, %v; want %q", got, absErr, dir)
+		}
+	})
+
+	t.Run("non-existent path rejected", func(t *testing.T) {
+		t.Parallel()
+		_, err := absPath("/nonexistent/jailwrap/path")
+		if err == nil {
+			t.Error("absPath(/nonexistent/jailwrap/path) expected error, got nil")
 		}
 	})
 
