@@ -54,18 +54,17 @@ func buildBwrapArgs(jailDir string, cfg Config, uid int) ([]string, error) {
 	uidStr := strconv.Itoa(uid)
 	var args []string
 
-	// ── Home directory (read-only base, must be first) ─────────────────────────
+	// ── Home directory (tmpfs base, must be first) ───────────────────────────
 
-	// Mount HOME read-only as the FIRST mount so that every more-specific --bind
-	// added later (jailDir, cfg.RWBind entries) can shadow individual sub-paths
-	// with writable mounts. bwrap applies mounts left-to-right; later more-specific
-	// mounts win. If this came after --bind jailDir or cfg.RWBind entries, it would
-	// clobber their writability when jailDir/RWBind paths are under $HOME.
+	// Mount HOME as tmpfs FIRST so the sandbox starts with an empty home directory.
+	// Credential files (.ssh, .aws, etc.) are invisible by default — allowlist only.
+	// Explicit cfg.ROBind and cfg.RWBind entries under HOME are appended later and
+	// land inside this tmpfs; bwrap applies mounts left-to-right.
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return nil, fmt.Errorf("resolving user home: %w", err)
 	}
-	args = append(args, "--ro-bind", homeDir, homeDir)
+	args = append(args, "--tmpfs", homeDir)
 
 	// ── Filesystem baseline ────────────────────────────────────────────────────
 
