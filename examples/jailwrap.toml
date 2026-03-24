@@ -1,0 +1,18 @@
+# jailwrap per-project configuration
+# Location: <project-root>/jailwrap.toml
+#
+# ⚠ SECURITY: This file is loaded from the project directory before sandboxing.
+# A malicious repository can use this file to change sandbox behavior.
+# Review jailwrap.toml before running jailwrap in an untrusted repository,
+# just as you would review a Makefile or package.json.
+#
+# Project config is intentionally limited to behavior flags only.
+# Bind mounts (ro_bind, bind) and env pass-through (passenv) are not
+# permitted here — use the global config (~/.config/jailwrap/config.toml)
+# for those settings, which only you control.
+
+# Disable --new-session to re-enable Ctrl+Z / job control for this project.
+# new_session = false
+
+# Share host /tmp for this project (exposes X11/Wayland sockets).
+# share_tmp = true
