@@ -1,6 +1,6 @@
 # krng
 
-**krng** (*kurung* — Malay/Indonesian for "to confine") is a lightweight sandbox wrapper for developer tools on Linux. It uses [Bubblewrap](https://github.com/containers/bubblewrap) to confine tools (e.g. AI coding assistants, build systems) to a project directory, isolating them from credentials, SSH keys, GPG sockets, and other sensitive data on the host.
+**krng** (*kurung* — Indonesian for "to confine") is a lightweight sandbox wrapper for developer tools on Linux. It uses [Bubblewrap](https://github.com/containers/bubblewrap) to confine tools (e.g. AI coding assistants, build systems) to a project directory, isolating them from credentials, SSH keys, GPG sockets, and other sensitive data on the host.
 
 ## Why
 
@@ -179,6 +179,14 @@ make test        # run tests with race detector
 make check       # vet + test
 make clean       # remove build artifacts
 ```
+
+## Similar tools
+
+- [Claude Dev Container](https://code.claude.com/docs/en/devcontainer) — official Docker-based dev container for Claude Code; full container isolation
+- [cco](https://github.com/nikvdp/cco) — runs Claude Code in a Docker container with automatic project mounting
+- [claudebox](https://github.com/RchGrav/claudebox) — Docker-based sandbox with a curated development toolchain for Claude Code
+
+krng differs in that it uses Bubblewrap (no Docker/container runtime required) and has zero overhead — it's a thin namespace wrapper, not a VM or container image.
 
 ## License
 
