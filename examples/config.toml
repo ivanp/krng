@@ -35,3 +35,7 @@
 
 # Share host /tmp inside the sandbox (exposes X11/Wayland sockets; off by default).
 # share_tmp = true
+
+# Enable Docker support: mounts /sys read-only, shares cgroup namespace,
+# and auto-binds the Docker socket (/run/docker.sock).
+# docker = true

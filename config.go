@@ -21,6 +21,7 @@ type Config struct {
 	RWBind     []string `toml:"bind"`
 	NewSession *bool    `toml:"new_session"`
 	ShareTmp   *bool    `toml:"share_tmp"`
+	Docker     *bool    `toml:"docker"`
 }
 
 // ProjectConfig is the parsed representation of the per-project config (WORK_DIR/krng.toml).
@@ -29,6 +30,7 @@ type Config struct {
 type ProjectConfig struct {
 	NewSession *bool `toml:"new_session"`
 	ShareTmp   *bool `toml:"share_tmp"`
+	Docker     *bool `toml:"docker"`
 }
 
 // loadConfig loads a TOML config from path.
@@ -86,6 +88,9 @@ func mergeConfigs(global Config, project ProjectConfig) Config {
 	}
 	if project.ShareTmp != nil {
 		merged.ShareTmp = project.ShareTmp
+	}
+	if project.Docker != nil {
+		merged.Docker = project.Docker
 	}
 	return merged
 }
@@ -182,6 +187,16 @@ func applyEnvOverrides(cfg Config) Config {
 	case "1":
 		t := true
 		cfg.NewSession = &t
+	}
+
+	// KRNG_DOCKER: "1" enables Docker support, "0" explicitly disables
+	switch os.Getenv("KRNG_DOCKER") {
+	case "1":
+		t := true
+		cfg.Docker = &t
+	case "0":
+		f := false
+		cfg.Docker = &f
 	}
 
 	return cfg

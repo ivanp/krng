@@ -54,6 +54,7 @@ Environment overrides:
   KRNG_PASSENV      Comma-separated env vars to pass through (e.g. "FOO,BAR")
   KRNG_SHARE_TMP    "1" to share host /tmp; "0" to isolate
   KRNG_NEW_SESSION  "0" to disable --new-session (re-enables job control)
+  KRNG_DOCKER       "1" to enable Docker support (mounts /sys, shares cgroup, binds Docker socket)
 
 Exit codes:
   0   Success

@@ -136,6 +136,13 @@ func buildBwrapArgs(jailDir string, cfg Config, uid int) ([]string, error) {
 		"--dev", "/dev",
 	)
 
+	// ── /sys: Docker needs /sys/fs/cgroup for container management ──────────
+
+	docker := cfg.Docker != nil && *cfg.Docker
+	if docker {
+		args = append(args, "--ro-bind", "/sys", "/sys")
+	}
+
 	// ── /tmp: isolated by default, shared on request ───────────────────────────
 
 	// Do NOT do --tmpfs /tmp followed by --bind /tmp /tmp: bwrap processes mounts
@@ -166,11 +173,43 @@ func buildBwrapArgs(jailDir string, cfg Config, uid int) ([]string, error) {
 
 	// ── Namespace isolation ────────────────────────────────────────────────────
 
-	args = append(args,
-		"--unshare-all",
-		"--share-net",
-		"--die-with-parent",
-	)
+	if docker {
+		// Docker needs cgroup namespace shared. bwrap has no --share-cgroup flag,
+		// so we enumerate individual --unshare-* flags and omit --unshare-cgroup.
+		args = append(args,
+			"--unshare-user-try",
+			"--unshare-pid",
+			"--unshare-ipc",
+			"--unshare-uts",
+			"--die-with-parent",
+		)
+	} else {
+		args = append(args,
+			"--unshare-all",
+			"--share-net",
+			"--die-with-parent",
+		)
+	}
+
+	// ── Docker socket ─────────────────────────────────────────────────────────
+
+	if docker {
+		// /var/run is a symlink to ../run on systemd systems. Docker CLI defaults
+		// to /var/run/docker.sock, so create the symlink inside the sandbox.
+		args = append(args, "--dir", "/var", "--symlink", "../run", "/var/run")
+
+		// Auto-detect Docker socket. Resolve symlinks (/var/run → /run).
+		for _, sock := range []string{"/run/docker.sock", "/var/run/docker.sock"} {
+			real, err := filepath.EvalSymlinks(sock)
+			if err != nil {
+				continue
+			}
+			if info, err := os.Stat(real); err == nil && info.Mode().Type() == os.ModeSocket {
+				args = append(args, "--bind", real, real)
+				break
+			}
+		}
+	}
 
 	// --new-session: detaches from controlling TTY, mitigating CVE-2017-5226
 	// (TIOCSTI injection) and CVE-2025-37814. Default on; opt-out for interactive shells.
@@ -181,10 +220,25 @@ func buildBwrapArgs(jailDir string, cfg Config, uid int) ([]string, error) {
 
 	// ── Config-declared extra mounts ───────────────────────────────────────────
 
+	// Reject config entries that would overwrite built-in mounts.
+	// Sub-paths (e.g. /run/docker.sock) are fine — only exact matches are blocked.
+	protectedMounts := map[string]bool{
+		"/proc": true,
+		"/dev":  true,
+		"/run":  true,
+		homeDir: true,
+	}
+	if docker {
+		protectedMounts["/sys"] = true
+	}
+
 	for _, p := range cfg.ROBind {
 		abs, err := absPath(p)
 		if err != nil {
 			return nil, fmt.Errorf("ro_bind %q: %w", p, err)
+		}
+		if protectedMounts[abs] {
+			return nil, fmt.Errorf("ro_bind %q conflicts with built-in mount; use sub-paths instead (e.g. %q)", p, abs+"/...")
 		}
 		args = append(args, "--ro-bind", abs, abs)
 	}
@@ -192,6 +246,9 @@ func buildBwrapArgs(jailDir string, cfg Config, uid int) ([]string, error) {
 		abs, err := absPath(p)
 		if err != nil {
 			return nil, fmt.Errorf("bind %q: %w", p, err)
+		}
+		if protectedMounts[abs] {
+			return nil, fmt.Errorf("bind %q conflicts with built-in mount; use sub-paths instead (e.g. %q)", p, abs+"/...")
 		}
 		args = append(args, "--bind", abs, abs)
 	}
